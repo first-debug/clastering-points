@@ -22,9 +22,9 @@ left_up = (55.980321,
 right_up = (55.981181,
             37.416553)
 right_bottum = (55.976810,
-            37.418634)
+                37.418634)
 left_bottum = (55.975907,
-            37.412519)
+               37.412519)
 
 connected_clients: set[ServerConnection] = set()
 queue: dict = {}
@@ -53,34 +53,43 @@ valid_area = [
         },
     ]
 
-def order_points(points):
-     cx = sum(p[0] for p in points) / len(points)
-     cy = sum(p[1] for p in points) / len(points)
-     res = sorted(points, key=lambda p: atan2(p[1] - cy, p[0] - cx))
-     res.append(res[0])
-     return res
 
-def check_coords(coords: list) -> list:
-    """Принимает (широта, долгота)"""
+def order_points(points):
+    cx = sum(p[0] for p in points) / len(points)
+    cy = sum(p[1] for p in points) / len(points)
+    res = sorted(points, key=lambda p: atan2(p[1] - cy, p[0] - cx))
+    res.append(res[0])
+    return res
+
+
+def check_coords(objects: list[dict]) -> list[dict]:
     result = []
 
     # Разворачиваем координаты. Было lat = x, lon = y, стало lat = y, lon = x
     # и находим правильный порядок соединения вершин (по  часовой стрелке)
-    polygon = Polygon(order_points([x[::-1] for x in [left_up, right_up, right_bottum, left_bottum]]))
+    polygon = Polygon(order_points(
+        [x[::-1] for x in [left_up, right_up, right_bottum, left_bottum]])
+                      )
 
     if not polygon.is_valid:
         print("Polygon is invalid!")
         return result
 
+    for i in objects:
+        lat = i.get('lat', None)
+        lng = i.get('lng', None)
+        if lat is None or lng is None:
+            print("cannot parse 'lat' and 'lng' from object")
+            continue
 
-    for lat, lng in coords:
         if polygon.contains(Point(lng, lat)):
-            result.append([lat, lng])
+            result.append(i)
             continue
         print("Filtered point:", (lat, lng))
 
     # fig, ax = plt.subplots()
-    # plot_polygon(polygon, ax=ax, add_points=True, facecolor='lightblue', edgecolor='blue')
+    # plot_polygon(polygon, ax=ax, add_points=True, facecolor='lightblue',
+    #              edgecolor='blue')
 
     # np_coords = np.array(result)
     # plt.scatter(np_coords[:, 0], np_coords[:, 1])
@@ -88,38 +97,26 @@ def check_coords(coords: list) -> list:
     return result
 
 
-def check_coords_squer(coords: list) -> list:
-    result = []
-    for lng, lat in coords:
-        if (55.975907 <= lng <= 55.981181) and (37.410338 <= lat <= 37.418634):
-            result.append([lat, lng])
-            continue
-    return result
-
-
-def cluster_objects(objects: list[dict], max_distance_m: float = 15.0) -> list[dict]:
+def cluster_objects(objects: list[dict],
+                    max_distance_m: float = 15.0) -> list[dict]:
     if not objects:
         return []
-    # отдаём (широта, долгота)
-    # FIX: нужно передать и возвращать целые объекты
-    filtered_coords: list = check_coords([[o['lat'], o['lng']] for o in objects])
+    filtered_coords: list = check_coords(objects)
     if len(filtered_coords) == 0:
         return []
 
     result = []
 
-    coords = np.radians(filtered_coords)
+    coords = np.radians(
+            [[c.get('lat'), c.get('lng')] for c in filtered_coords]
+            )
     eps = max_distance_m / EARTH_RADIUS_M
-
 
     clustering = DBSCAN(eps=eps, min_samples=1, metric='haversine').fit(coords)
     labels = clustering.labels_
 
-    print(objects)
-    print(labels)
-    print(filtered_coords)
     clusters = {}
-    for label, obj in zip(labels, objects):
+    for label, obj in zip(labels, filtered_coords):
         clusters.setdefault(label, []).append(obj)
 
     for cluster_objs in clusters.values():
@@ -129,7 +126,7 @@ def cluster_objects(objects: list[dict], max_distance_m: float = 15.0) -> list[d
     return result
 
 
-def process_data(data: dict, addr) -> dict:
+def process_data(data: dict) -> dict:
     time = str(data.get('timestamp')).split('.')[0]
     prev: dict = queue.pop(time, {})
     if len(prev) == 0:
@@ -137,7 +134,9 @@ def process_data(data: dict, addr) -> dict:
         return {}
     prev_fut = prev.get('future', [])
     cur_fut = data.get('future', [])
-    deduped = cluster_objects(prev_fut + cur_fut, max_distance_m=MAX_DISTANCE_M)
+    deduped = cluster_objects(
+            prev_fut + cur_fut,
+            max_distance_m=MAX_DISTANCE_M)
     deduped.extend(valid_area)
     return {
         'camera_id': data.get('camera_id'),
@@ -151,7 +150,6 @@ async def broadcast(message: dict):
     if not connected_clients:
         return
     payload = json.dumps(message, ensure_ascii=False)
-    # asyncio.gather с return_exceptions, чтобы отвал одного клиента не рушил остальных
     await asyncio.gather(
         *(client.send(payload) for client in connected_clients),
         return_exceptions=True,
@@ -160,7 +158,8 @@ async def broadcast(message: dict):
 
 async def ws_handler(websocket: ServerConnection):
     connected_clients.add(websocket)
-    print(f"WS клиент подключился: {websocket.remote_address}, всего клиентов: {len(connected_clients)}")
+    print(f"WS клиент подключился: {websocket.remote_address}, \
+          всего клиентов: {len(connected_clients)}")
     try:
         async for _ in websocket:
             pass
@@ -168,7 +167,8 @@ async def ws_handler(websocket: ServerConnection):
         pass
     finally:
         connected_clients.discard(websocket)
-        print(f"WS клиент отключился, всего клиентов: {len(connected_clients)}")
+        print(f"WS клиент отключился, \
+              всего клиентов: {len(connected_clients)}")
 
 
 class UDPProtocol(asyncio.DatagramProtocol):
@@ -186,7 +186,7 @@ class UDPProtocol(asyncio.DatagramProtocol):
             return
 
         try:
-            response = process_data(message, addr)
+            response = process_data(message)
         except Exception as e:
             print(f"Ошибка обработки данных от {addr}: {e}")
             return
@@ -201,10 +201,10 @@ async def main():
         lambda: UDPProtocol(loop),
         local_addr=(UDP_HOST, UDP_PORT),
     )
-    print(f"UDP сервер запущен на {UDP_HOST}:{UDP_PORT}")
+    print(f"UDP is listening {UDP_HOST}:{UDP_PORT}")
 
     ws_server = await websockets.serve(ws_handler, WS_HOST, WS_PORT)
-    print(f"WebSocket сервер запущен на {WS_HOST}:{WS_PORT}")
+    print(f"WebSocket is running on {WS_HOST}:{WS_PORT}")
 
     try:
         await asyncio.Future()
@@ -216,4 +216,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
