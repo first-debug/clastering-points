@@ -1,0 +1,18 @@
+udp-host: '0.0.0.0'
+udp-port: 6767
+ws-host: '0.0.0.0'
+ws-port: 8765
+
+max-distance-m: 30.0
+earth-radius-m: 6371000
+
+polygon:
+  - lat: 55.980321
+    lng: 37.410338
+  - lat: 55.981181
+    lng: 37.416553
+  - lat: 55.976810
+    lng: 37.418634
+  - lat: 55.975907
+    lng: 37.412519
+

@@ -1,75 +1,24 @@
 import asyncio
+import sys
 import json
 import numpy as np
 from sklearn.cluster import DBSCAN
 import websockets
 from websockets.asyncio.server import ServerConnection
 from shapely.geometry import Point, Polygon
-from pyproj import Transformer
-from math import atan2
+from collections.abc import Callable
 
+from select_funcs import max_confidence
+import config
 
-UDP_HOST = '0.0.0.0'
-UDP_PORT = 6767
-WS_HOST = '0.0.0.0'
-WS_PORT = 8765
-
-MAX_DISTANCE_M = 30.0
-EARTH_RADIUS_M = 6371000
-
-left_up = (55.980321,
-           37.410338)
-right_up = (55.981181,
-            37.416553)
-right_bottum = (55.976810,
-                37.418634)
-left_bottum = (55.975907,
-               37.412519)
-
+polygon: Polygon
 connected_clients: set[ServerConnection] = set()
 queue: dict = {}
-transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
-
-valid_area = [
-        {
-            'lat': left_up[0],
-            'lng': left_up[1],
-            'name': 'area',
-        },
-        {
-            'lat': right_up[0],
-            'lng': right_up[1],
-            'name': 'area',
-        },
-        {
-            'lat': right_bottum[0],
-            'lng': right_bottum[1],
-            'name': 'area',
-        },
-        {
-            'lat': left_bottum[0],
-            'lng': left_bottum[1],
-            'name': 'area',
-        },
-    ]
-
-
-def order_points(points):
-    cx = sum(p[0] for p in points) / len(points)
-    cy = sum(p[1] for p in points) / len(points)
-    res = sorted(points, key=lambda p: atan2(p[1] - cy, p[0] - cx))
-    res.append(res[0])
-    return res
-
+valid_area = list[dict]
+cfg: config.Config
 
 def check_coords(objects: list[dict]) -> list[dict]:
     result = []
-
-    # Разворачиваем координаты. Было lat = x, lon = y, стало lat = y, lon = x
-    # и находим правильный порядок соединения вершин (по  часовой стрелке)
-    polygon = Polygon(order_points(
-        [x[::-1] for x in [left_up, right_up, right_bottum, left_bottum]])
-                      )
 
     if not polygon.is_valid:
         print("Polygon is invalid!")
@@ -87,17 +36,11 @@ def check_coords(objects: list[dict]) -> list[dict]:
             continue
         print("Filtered point:", (lat, lng))
 
-    # fig, ax = plt.subplots()
-    # plot_polygon(polygon, ax=ax, add_points=True, facecolor='lightblue',
-    #              edgecolor='blue')
-
-    # np_coords = np.array(result)
-    # plt.scatter(np_coords[:, 0], np_coords[:, 1])
-    # plt.savefig("poly.png")
     return result
 
 
 def cluster_objects(objects: list[dict],
+                    select_best_point: Callable[[list[dict]], dict],
                     max_distance_m: float = 15.0) -> list[dict]:
     if not objects:
         return []
@@ -110,7 +53,7 @@ def cluster_objects(objects: list[dict],
     coords = np.radians(
             [[c.get('lat'), c.get('lng')] for c in filtered_coords]
             )
-    eps = max_distance_m / EARTH_RADIUS_M
+    eps = max_distance_m / cfg.earth_radius_m
 
     clustering = DBSCAN(eps=eps, min_samples=1, metric='haversine').fit(coords)
     labels = clustering.labels_
@@ -120,7 +63,7 @@ def cluster_objects(objects: list[dict],
         clusters.setdefault(label, []).append(obj)
 
     for cluster_objs in clusters.values():
-        best = max(cluster_objs, key=lambda o: float(o['confidence']))
+        best = select_best_point(cluster_objs)
         result.append(best)
 
     return result
@@ -136,7 +79,8 @@ def process_data(data: dict) -> dict:
     cur_fut = data.get('future', [])
     deduped = cluster_objects(
             prev_fut + cur_fut,
-            max_distance_m=MAX_DISTANCE_M)
+            max_confidence,
+            max_distance_m=cfg.max_distance_m)
     deduped.extend(valid_area)
     return {
         'camera_id': data.get('camera_id'),
@@ -215,4 +159,11 @@ async def main():
 
 
 if __name__ == "__main__":
+    config_file = ""
+    if len(sys.argv) == 2:
+        config_file = sys.argv[1]
+    try_config = config.load_config(config_file)
+    if try_config is None:
+        print("Cannot load config file.")
+        exit(-1)
     asyncio.run(main())
