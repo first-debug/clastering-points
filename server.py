@@ -8,16 +8,20 @@ from websockets.asyncio.server import ServerConnection
 from shapely.geometry import Point, Polygon
 from collections.abc import Callable
 
-from select_funcs import max_confidence
 import config
+from select_funcs import max_confidence
+from tools import make_valid_aera_points
 
 polygon: Polygon
 connected_clients: set[ServerConnection] = set()
 queue: dict = {}
-valid_area = list[dict]
+valid_area: list[dict]
 cfg: config.Config
 
+
 def check_coords(objects: list[dict]) -> list[dict]:
+    global polygon
+
     result = []
 
     if not polygon.is_valid:
@@ -42,6 +46,8 @@ def check_coords(objects: list[dict]) -> list[dict]:
 def cluster_objects(objects: list[dict],
                     select_best_point: Callable[[list[dict]], dict],
                     max_distance_m: float = 15.0) -> list[dict]:
+    global cfg
+
     if not objects:
         return []
     filtered_coords: list = check_coords(objects)
@@ -70,6 +76,9 @@ def cluster_objects(objects: list[dict],
 
 
 def process_data(data: dict) -> dict:
+    global cfg
+    global valid_area
+
     time = str(data.get('timestamp')).split('.')[0]
     prev: dict = queue.pop(time, {})
     if len(prev) == 0:
@@ -139,16 +148,21 @@ class UDPProtocol(asyncio.DatagramProtocol):
 
 
 async def main():
+    global cfg
+    global valid_area
+
+    valid_area = make_valid_aera_points(cfg.polygon_coords)
+
     loop = asyncio.get_running_loop()
 
     udp_transport, _ = await loop.create_datagram_endpoint(
         lambda: UDPProtocol(loop),
-        local_addr=(UDP_HOST, UDP_PORT),
+        local_addr=(cfg.udp_host, cfg.udp_port),
     )
-    print(f"UDP is listening {UDP_HOST}:{UDP_PORT}")
+    print(f"UDP is listening {cfg.udp_host}:{cfg.udp_port}")
 
-    ws_server = await websockets.serve(ws_handler, WS_HOST, WS_PORT)
-    print(f"WebSocket is running on {WS_HOST}:{WS_PORT}")
+    ws_server = await websockets.serve(ws_handler, cfg.ws_host, cfg.ws_port)
+    print(f"WebSocket is running on {cfg.ws_host}:{cfg.ws_port}")
 
     try:
         await asyncio.Future()
@@ -159,11 +173,12 @@ async def main():
 
 
 if __name__ == "__main__":
-    config_file = ""
+    config_file = "config.yaml"
     if len(sys.argv) == 2:
         config_file = sys.argv[1]
     try_config = config.load_config(config_file)
     if try_config is None:
         print("Cannot load config file.")
         exit(-1)
+    cfg = try_config
     asyncio.run(main())

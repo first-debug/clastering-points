@@ -6,7 +6,7 @@ ws-port: 8765
 max-distance-m: 30.0
 earth-radius-m: 6371000
 
-polygon:
+polygon-coords:
   - lat: 55.980321
     lng: 37.410338
   - lat: 55.981181
