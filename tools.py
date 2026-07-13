@@ -1,6 +1,6 @@
 from math import atan2
 from shapely import is_valid_reason
-from shapely.geometry import Polygon
+from shapely.geometry import Point, Polygon
 
 
 def order_points(points):
@@ -24,3 +24,25 @@ def fill_polygon(coords: list[set[float]]) -> Polygon | None:
 
 def make_valid_aera_points(points: list[dict]) -> list[dict]:
     return [p | {'name': 'area'} for p in points]
+
+
+def check_coords(objects: list[dict], polygon: Polygon) -> list[dict]:
+    result = []
+
+    if not polygon.is_valid:
+        print("Polygon is invalid!")
+        return result
+
+    for i in objects:
+        lat = i.get('lat', None)
+        lng = i.get('lng', None)
+        if lat is None or lng is None:
+            print("Cannot parse 'lat' and 'lng' from object.")
+            continue
+
+        if polygon.contains(Point(lng, lat)):
+            result.append(i)
+            continue
+        print("Filtered point:", (lat, lng))
+
+    return result
