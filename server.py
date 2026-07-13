@@ -10,7 +10,7 @@ from collections.abc import Callable
 
 import config
 from select_funcs import max_confidence
-from tools import make_valid_aera_points
+from tools import make_valid_aera_points, order_points
 
 polygon: Polygon
 connected_clients: set[ServerConnection] = set()
@@ -32,7 +32,7 @@ def check_coords(objects: list[dict]) -> list[dict]:
         lat = i.get('lat', None)
         lng = i.get('lng', None)
         if lat is None or lng is None:
-            print("cannot parse 'lat' and 'lng' from object")
+            print("Cannot parse 'lat' and 'lng' from object.")
             continue
 
         if polygon.contains(Point(lng, lat)):
@@ -150,8 +150,12 @@ class UDPProtocol(asyncio.DatagramProtocol):
 async def main():
     global cfg
     global valid_area
+    global polygon
 
     valid_area = make_valid_aera_points(cfg.polygon_coords)
+    polygon = Polygon(
+            order_points([(i['lng'], i['lat']) for i in cfg.polygon_coords])
+            )
 
     loop = asyncio.get_running_loop()
 
