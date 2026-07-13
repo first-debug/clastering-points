@@ -24,13 +24,13 @@ class Config:
         assert polygon_coords is not None
         assert len(polygon_coords) != 0
 
-        self.udp_host = udp_host
-        self.udp_port = udp_port
-        self.ws_host = ws_host
-        self.ws_port = ws_port
-        self.max_distance_m = max_distance_m
-        self.earth_radius_m = earth_radius_m
-        self.polygon_coords = polygon_coords
+        self.udp_host: str = udp_host
+        self.udp_port: int = udp_port
+        self.ws_host: str = ws_host
+        self.ws_port: int = ws_port
+        self.max_distance_m: int = max_distance_m
+        self.earth_radius_m: int = earth_radius_m
+        self.polygon_coords: list[dict] = polygon_coords
 
 
 def load_config(file_name: str = "config.yaml") -> Config | None:
