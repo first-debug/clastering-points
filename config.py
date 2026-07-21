@@ -2,14 +2,6 @@ from yaml import safe_load
 
 
 class Config:
-    udp_host: str
-    udp_port: int
-    ws_host: str
-    ws_port: int
-    max_distance_m: float
-    earth_radius_m: int
-    polygon_coords: list[dict]
-
     def __init__(self, udp_host: str, udp_port: int,
                  ws_host: str, ws_port: int,
                  max_distance_m: float, earth_radius_m: int,

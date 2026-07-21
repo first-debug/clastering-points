@@ -3,13 +3,21 @@ import sys
 import websockets
 
 import config
+from select_funcs import get_centered_coordinates
 from servers import WebSocketService, UDPProtocol
-from process import ProcessService
+from process import ProcessService, ProcessServiceConfig
 
 
 async def main(cfg: config.Config):
     ws = WebSocketService()
-    process_service = ProcessService(cfg)
+    process_service = ProcessService(
+            ProcessServiceConfig(
+                cfg.max_distance_m,
+                cfg.earth_radius_m,
+                cfg.polygon_coords,
+                get_centered_coordinates
+                )
+            )
     loop = get_running_loop()
 
     udp_transport, _ = await loop.create_datagram_endpoint(
