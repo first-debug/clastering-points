@@ -7,7 +7,7 @@ def max_confidence(objs: list[dict]) -> dict:
 
 def get_centered_coordinates(
         coords: list[dict]
-        ) -> dict:
+        ) -> dict | None:
     if not coords:
         return None
 

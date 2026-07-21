@@ -48,6 +48,8 @@ class ProcessService:
 
         for cluster_objs in clusters.values():
             best = select_best_point(cluster_objs)
+            if best is None:
+                continue
             result.append(best)
 
         return result
