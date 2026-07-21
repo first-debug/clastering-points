@@ -66,7 +66,7 @@ class ProcessService:
                 max_distance_m=self.max_distance_m)
         deduped.extend(self.valid_area)
         return {
-            'camera_id': data.get('camera_id'),
+            'camera_id': 0,
             'timestamp': data.get('timestamp'),
             'future': deduped,
         }
